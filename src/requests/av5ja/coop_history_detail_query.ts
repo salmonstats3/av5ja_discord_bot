@@ -15,7 +15,6 @@ export namespace CoopHistoryDetailQuery {
       this.parameters = {
         coopHistoryDetailId: result_id
       };
-      console.log(result_id);
     }
 
     request(response: any): Response {

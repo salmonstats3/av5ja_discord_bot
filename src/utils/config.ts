@@ -28,6 +28,10 @@ export class TestConfig {
   @IsString()
   @IsNotEmpty()
   readonly guild_id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  readonly bot_version: string;
 }
 
 export const config: TestConfig = (() => {
@@ -38,6 +42,7 @@ export const config: TestConfig = (() => {
     {
       application_id: process.env.DISCORD_APPLICATION_ID,
       application_secret: process.env.DISCORD_APPLICATION_SECRET,
+      bot_version: process.env.BOT_VERSION,
       guild_id: process.env.DISCORD_GUILD_ID,
       is_development: process.env.NODE_ENV === 'development',
       session_token: process.env.SESSION_TOKEN,

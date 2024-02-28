@@ -33,7 +33,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
   if (interaction.isModalSubmit()) {
-    console.log(interaction.customId);
     switch (interaction.customId) {
       case 'submit':
         CoralOAuth.login.execute(interaction);

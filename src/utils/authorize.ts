@@ -5,6 +5,7 @@ import base64url from 'base64url';
 import { plainToInstance } from 'class-transformer';
 import dayjs from 'dayjs';
 import {
+  APIEmbedField,
   ActionRowBuilder,
   AnyComponentBuilder,
   AttachmentBuilder,
@@ -13,9 +14,11 @@ import {
   ButtonStyle,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  Message,
   ModalBuilder,
   ModalSubmitInteraction,
   SlashCommandBuilder,
+  TextBasedChannel,
   TextInputBuilder,
   TextInputStyle
 } from 'discord.js';
@@ -41,9 +44,10 @@ import { UserMe } from '@/requests/oauth/user_me';
 import { Version } from '@/requests/stats/version';
 
 type CoralOAuthConfig = {
+  readonly revision: string;
   readonly state: string;
-  readonly user_id: string;
   readonly verifier: string;
+  readonly version: string;
 };
 
 export class CoralOAuth {
@@ -51,28 +55,10 @@ export class CoralOAuth {
 
   constructor() {}
 
-  static get_config(user_id: string): CoralOAuthConfig {
-    const config: CoralOAuthConfig = (() => {
-      const config: CoralOAuthConfig | undefined = this.configs.find((config) => config.user_id === user_id);
-      if (config !== undefined) {
-        return config;
-      }
-      const new_config: CoralOAuthConfig = {
-        state: Randomstring.generate(64),
-        user_id,
-        verifier: Randomstring.generate(64)
-      };
-      this.configs.push(new_config);
-      return new_config;
-    })();
-    return config;
-  }
-
-  static oauthURL(user_id: string): string {
-    const config: CoralOAuthConfig = this.get_config(user_id);
+  static oauthURL(state: string, verifier: string): string {
     // @ts-ignore
     const baseURL: URL = new URL('https://accounts.nintendo.com/connect/1.0.0/authorize');
-    const challenge = base64url.fromBase64(crypto.createHash('sha256').update(config.verifier).digest('base64'));
+    const challenge = base64url.fromBase64(crypto.createHash('sha256').update(verifier).digest('base64'));
     const parameters = new URLSearchParams({
       client_id: '71b963c1b7b6d119',
       redirect_uri: 'npf71b963c1b7b6d119://auth',
@@ -80,58 +66,50 @@ export class CoralOAuth {
       scope: 'openid user user.birthday user.mii user.screenName',
       session_token_code_challenge: challenge,
       session_token_code_challenge_method: 'S256',
-      state: config.state
+      state: state
     });
     baseURL.search = parameters.toString();
     return baseURL.toString();
   }
 
-  static async get_cookie(user_id: string, url: string): Promise<CoralCredential> {
-    const config: CoralOAuthConfig | undefined = this.configs.find((config) => config.user_id === user_id);
-    if (config === undefined) {
-      throw new AxiosError('This user has been not authorized yet.', StatusCode.ERROR_INVALID_PARAMETERS);
-    }
+  static async get_cookie(url: string, verifier: string, version: string, revision: string): Promise<CoralCredential> {
     const regexp: RegExp = new RegExp('#session_token_code=(.*)&state=(.*)&session_state=(.*)$');
     const match: RegExpExecArray | null = regexp.exec(url);
     if (match === null) {
       throw new AxiosError('Invalid URL', StatusCode.ERROR_INVALID_URL);
     }
     const [, code, state, session_state] = match;
-    const session_token = await this.get_session_token(code, config.verifier);
-    return this.refresh(session_token);
+    const session_token = await this.get_session_token(code, verifier);
+    return this.refresh(session_token, version, revision);
   }
 
-  static async refresh(session_token: JWT<Token.SessionToken>): Promise<CoralCredential> {
-    const version = await this.get_version();
+  static async refresh(
+    session_token: JWT<Token.SessionToken>,
+    version: string,
+    revision: string
+  ): Promise<CoralCredential> {
     const access_token = await this.get_access_token(session_token);
     const user_me = await this.get_user_me(access_token);
-    const coral_token_nso = await this.get_coral_token(access_token, undefined, config.version);
-    const game_service_token = await this.get_game_service_token(
-      access_token,
-      coral_token_nso,
-      config.version,
-      user_me
-    );
+    const coral_token_nso = await this.get_coral_token(access_token, undefined, version);
+    const game_service_token = await this.get_game_service_token(access_token, coral_token_nso, version, user_me);
     const coral_token_app = await this.get_coral_token(
       game_service_token.access_token,
       access_token.payload.sub,
-      config.version
+      version
     );
-    const game_web_token = await this.get_game_web_token(
-      game_service_token.access_token,
-      coral_token_app,
-      config.version
-    );
-    const bullet_token = await this.get_bullet_token(game_web_token, version.revision);
+    const game_web_token = await this.get_game_web_token(game_service_token.access_token, coral_token_app, version);
+    const bullet_token = await this.get_bullet_token(game_web_token, revision);
+
     return {
       birthday: user_me.birthday,
       bullet_token: bullet_token,
       country: user_me.country,
+      expires_in: dayjs().add(115, 'minute').toDate(),
       game_web_token: game_web_token,
       id: user_me.id,
       language: user_me.language,
       nickname: user_me.nickname,
-      revision: version.revision,
+      revision: revision,
       session_token: session_token
     };
   }
@@ -211,6 +189,11 @@ export class CoralOAuth {
     return results;
   }
 
+  /**
+   * 認証情報取得コマンド
+   * @param interaction
+   * @returns
+   */
   static async get_credential(interaction: ButtonInteraction): Promise<CoralCredential> {
     const options: AxiosRequestConfig = {
       headers: {
@@ -222,20 +205,41 @@ export class CoralOAuth {
     };
     return plainToInstance(CoralCredential, (await axios.request(options)).data);
   }
+
   /**
    * リザルト取得コマンド
    */
   static get_results = {
     execute: async (interaction: ButtonInteraction): Promise<void> => {
       try {
-        // console.log(interaction.)
+        const channel: TextBasedChannel | null = interaction.channel;
+        if (channel === null) {
+          interaction.reply({ content: 'This command is not available in DM.', ephemeral: true });
+        }
+        console.log(interaction.message.id);
+
         await interaction.deferReply({ ephemeral: true });
         await interaction.editReply({ content: 'Fetching token ...' });
-        const credential: CoralCredential = await this.get_credential(interaction);
+        const credential: CoralCredential = await (async () => {
+          const credential: CoralCredential = await this.get_credential(interaction);
+          if (credential.expires_in < dayjs().toDate()) {
+            await interaction.editReply({ content: 'Regenerating token ...' });
+            return await this.refresh(credential.session_token);
+          }
+          return credential;
+        })();
+        await interaction.editReply({ content: 'Checking token expiration ...' });
         await interaction.editReply({ content: 'Fetching coop histories ...' });
         const histories = await this.get_coop_histories(credential);
         await interaction.editReply({ content: 'Fetching coop results ...' });
-        const results = await this.get_coop_results(histories, credential);
+
+        // const lastPlayedTime: Date = dayjs().subtract(7, 'day').toDate();
+        // const history = histories.histories
+        //   .map((history) => history.results)
+        //   .flat()
+        //   .sort((a, b) => dayjs(b.playTime).unix() - dayjs(a.playTime).unix())
+        //   .at(0);
+        // const results = await this.get_coop_results(histories, credential);
         const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
         content.setColor('#FF3300').setTitle('Fetch Results').addFields(
           {
@@ -246,7 +250,7 @@ export class CoralOAuth {
           {
             inline: true,
             name: 'Results',
-            value: results.length.toString()
+            value: '50'
           }
         );
         const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
@@ -276,21 +280,49 @@ export class CoralOAuth {
       }
     }
   };
+
+  static get_auth_config(interaction: ModalSubmitInteraction): CoralOAuthConfig {
+    const message: Message | null = interaction.message;
+    if (message === null) {
+      throw new Error('Message is not found.');
+    }
+    if (message.embeds.length === 0) {
+      throw new Error('Embed is not found.');
+    }
+    const fields: APIEmbedField[] = message.embeds[0].fields;
+    const user_id: string = interaction.user.id;
+    const verifier: string | undefined = fields.find((field) => field.name === 'Verifier')?.value;
+    const state: string | undefined = fields.find((field) => field.name === 'State')?.value;
+    const version: string | undefined = fields.find((field) => field.name === 'Version')?.value;
+    const revision: string | undefined = fields.find((field) => field.name === 'Revision')?.value;
+    // every, someで書くと補完が効かない
+    if (state === undefined || verifier === undefined || version === undefined || revision === undefined) {
+      throw new Error('Verifier or State is not found.');
+    }
+    return {
+      revision,
+      state,
+      verifier,
+      version
+    };
+  }
+
   /**
    * 認証コマンド
    */
   static login = {
     execute: async (interaction: ModalSubmitInteraction): Promise<void> => {
-      const user_id: string = interaction.user.id;
+      const { revision, state, verifier, version } = this.get_auth_config(interaction);
       const url: string = interaction.fields.getTextInputValue('oauthURL');
       try {
-        await interaction.deferReply({ ephemeral: true });
-        const credential = await this.get_cookie(user_id, url);
+        await interaction.deferReply();
+        const credential = await this.get_cookie(url, verifier, version, revision);
         const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
           name: 'token.json'
         });
         const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
-          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
+          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results'),
+          new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel('Refresh').setCustomId('refresh')
         ]);
         const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
         content
@@ -323,8 +355,9 @@ export class CoralOAuth {
       }
     }
   };
+
   /**
-   * 認証URL入力モーダルコマンド
+   * 入力認証URL表示コマンド
    */
   static submit = {
     execute: async (interaction: ButtonInteraction): Promise<void> => {
@@ -340,44 +373,66 @@ export class CoralOAuth {
       interaction.showModal(modal);
     }
   };
+
   /**
-   * 認証ダイアログ表示コマンド
+   * 認証用URL送信コマンド
    */
   static authorize = {
     data: new SlashCommandBuilder().setName('authorize').setDescription('Get SplatNet3 Authorization URL'),
     execute: async (interaction: ChatInputCommandInteraction): Promise<void> => {
+      const verifier: string = Randomstring.generate(64);
+      const state: string = Randomstring.generate(64);
+      const reply = await interaction.deferReply({ fetchReply: true });
       const user_id: string = interaction.user.id;
       const version: Version.Response = await this.get_version();
       const action: ActionRowBuilder<AnyComponentBuilder> = new ActionRowBuilder().addComponents(
         ...[
-          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Open URL').setURL(this.oauthURL(user_id)),
+          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Open URL').setURL(this.oauthURL(state, verifier)),
           new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel('Authorize').setCustomId('authorize')
         ]
       );
       const content: EmbedBuilder = new EmbedBuilder()
         .setColor('#0099FF')
         .setTitle('SplatNet3 Authorization')
-        .setDescription('Click the link below to authorize SplatNet3.')
+        .setDescription(
+          'Press the Open URL button, sign in with your Nintendo Account, right-click on the Select this account and copy the URL. Then press Authorize, paste the copied URL and submit.'
+        )
         .addFields(
           {
             inline: true,
-            name: 'Issuer',
-            value: user_id
-          },
-          {
-            inline: true,
             name: 'Version',
-            value: version.version
+            value: config.version
           },
           {
             inline: true,
             name: 'Revision',
             value: version.revision
+          },
+          {
+            inline: true,
+            name: 'Bot',
+            value: process.env.BOT_VERSION!
+          },
+          {
+            inline: true,
+            name: 'Verifier',
+            value: verifier
+          },
+          {
+            inline: true,
+            name: 'State',
+            value: state
+          },
+          {
+            inline: true,
+            name: 'Issuer',
+            value: user_id
           }
         )
         .setTimestamp();
+      await reply.delete();
       // @ts-ignore
-      interaction.reply({ components: [action], embeds: [content], ephemeral: true });
+      interaction.user.send({ components: [action], embeds: [content] });
     }
   };
 }

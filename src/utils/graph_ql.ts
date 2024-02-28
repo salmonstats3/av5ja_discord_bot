@@ -28,9 +28,9 @@ export interface GraphQL {
   readonly version: number;
 }
 
-async function submit<T extends GraphQL>(request: T, body: any, path: string): Promise<any> {
+async function submit<T extends GraphQL>(request: T, body: any): Promise<any> {
   const base_url: string = config.is_development ? 'http://127.0.0.1:3030' : 'https://api.splatnet3.com';
-  const url = new URL(`${base_url}/v1/${path}`);
+  const url = new URL(`${base_url}/v${request.version}/${request.destination}`);
   const options: AxiosRequestConfig = {
     data: body,
     headers: {
@@ -80,6 +80,7 @@ export async function call_api<T extends GraphQL, U extends ReturnType<T['reques
     url: url.href
   };
   const response = await axios.request(options);
+
   switch (response.status) {
     case 401:
       throw new AxiosError('', StatusCode.ERROR_INVALID_GAME_WEB_TOKEN);
@@ -96,5 +97,5 @@ export async function call_api<T extends GraphQL, U extends ReturnType<T['reques
     }
     throw new AxiosError('Unknown error occurred.', StatusCode.ERROR_UNKNOWN_STATUS);
   }
-  return submit(request, response.data, 'histories') as U;
+  return request.request(await submit(request, response.data)) as U;
 }

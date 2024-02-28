@@ -27,7 +27,9 @@ import { request } from './request_type';
 
 import { CoralCredential } from '@/dto/coral_credential';
 import { JWT, Token } from '@/dto/jwt.dto';
+import { ResultId } from '@/dto/result_id.dto';
 import { StatusCode } from '@/enum/status_code';
+import { CoopHistoryDetailQuery } from '@/requests/av5ja/coop_history_detail_query';
 import { CoopHistoryQuery } from '@/requests/av5ja/coop_history_query';
 import { AccessToken } from '@/requests/oauth/access_token';
 import { BulletToken } from '@/requests/oauth/bullet_token';
@@ -185,11 +187,29 @@ export class CoralOAuth {
     return ((await request(new BulletToken.Request(access_token, version))) as BulletToken.Response).bullet_token;
   }
 
-  static async get_coop_histories(credential: CoralCredential) {
-    await call_api(new CoopHistoryQuery.Request(), credential);
+  static async get_coop_histories(credential: CoralCredential): Promise<CoopHistoryQuery.Response> {
+    return call_api(new CoopHistoryQuery.Request(), credential);
   }
 
-  static async get_coop_results(credential: CoralCredential) {}
+  private static async get_coop_result(
+    result_id: ResultId,
+    credential: CoralCredential
+  ): Promise<CoopHistoryDetailQuery.Response> {
+    return call_api(new CoopHistoryDetailQuery.Request(result_id.rawValue), credential);
+  }
+
+  static async get_coop_results(
+    history: CoopHistoryQuery.Response,
+    credential: CoralCredential
+  ): Promise<PromiseSettledResult<CoopHistoryDetailQuery.Response>[]> {
+    const results = Promise.allSettled(
+      history.histories
+        .map((history) => history.results)
+        .flat()
+        .map((result_id) => this.get_coop_result(result_id, credential))
+    );
+    return results;
+  }
 
   static async get_credential(interaction: ButtonInteraction): Promise<CoralCredential> {
     const options: AxiosRequestConfig = {
@@ -207,19 +227,53 @@ export class CoralOAuth {
    */
   static get_results = {
     execute: async (interaction: ButtonInteraction): Promise<void> => {
-      interaction.deferReply({ ephemeral: true });
-      const credential: CoralCredential = await this.get_credential(interaction);
-      const histories = await this.get_coop_histories(credential);
-      const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
-      content
-        .setColor('#0033FF')
-        .setTitle('SplatNet3 Authorization')
-        .setDescription('Authorization is succeeded.')
-        .setTimestamp();
-      const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
-        new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
-      ]);
-      interaction.editReply({ content: '-' });
+      try {
+        // console.log(interaction.)
+        await interaction.deferReply({ ephemeral: true });
+        await interaction.editReply({ content: 'Fetching token ...' });
+        const credential: CoralCredential = await this.get_credential(interaction);
+        await interaction.editReply({ content: 'Fetching coop histories ...' });
+        const histories = await this.get_coop_histories(credential);
+        await interaction.editReply({ content: 'Fetching coop results ...' });
+        const results = await this.get_coop_results(histories, credential);
+        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
+        content.setColor('#FF3300').setTitle('Fetch Results').addFields(
+          {
+            inline: true,
+            name: 'Histories',
+            value: histories.histories.length.toString()
+          },
+          {
+            inline: true,
+            name: 'Results',
+            value: results.length.toString()
+          }
+        );
+        const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
+          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
+        ]);
+        // @ts-ignore
+        await interaction.editReply({ components: [action], embeds: [content], ephemeral: false });
+      } catch (error: any) {
+        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Failed');
+        content
+          .setColor('#FF3300')
+          .setTitle('SplatNet3')
+          .setDescription('Fetching results is failed with a following error.')
+          .addFields(
+            {
+              inline: true,
+              name: 'Error',
+              value: error.message
+            },
+            {
+              inline: true,
+              name: 'Code',
+              value: error.code
+            }
+          );
+        interaction.editReply({ embeds: [content] });
+      }
     }
   };
   /**
@@ -252,7 +306,7 @@ export class CoralOAuth {
         content
           .setColor('#FF3300')
           .setTitle('SplatNet3 Authorization')
-          .setDescription('Authorization is failed with following error.')
+          .setDescription('Authorization is failed with a following error.')
           .addFields(
             {
               inline: true,

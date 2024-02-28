@@ -1,7 +1,14 @@
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 import { ChatInputCommandInteraction, Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 
 import { CoralOAuth } from './utils/authorize';
 import { config } from './utils/config';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Asia/Tokyo');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]

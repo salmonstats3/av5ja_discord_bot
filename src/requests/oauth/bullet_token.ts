@@ -20,7 +20,7 @@ export namespace BulletToken {
         'X-GameWebToken': token.raw_value,
         'X-NaCountry': 'US',
         'X-Requested-With': 'com.nintendo.znca',
-        'X-Web-View-Ver': version,
+        'X-Web-View-Ver': version
       };
     }
 

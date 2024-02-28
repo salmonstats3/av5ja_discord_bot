@@ -14,7 +14,7 @@ export namespace Version {
 
     constructor() {
       this.headers = {
-        'User-Agent': 'av5ja/2.1.7',
+        'User-Agent': 'av5ja/2.1.7'
       };
     }
 

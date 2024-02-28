@@ -12,7 +12,7 @@ export namespace SessionToken {
       'Accept-Language': 'en-US',
       Connection: 'Keep-Alive',
       'Content-Type': 'application/json',
-      Host: 'accounts.nintendo.com',
+      Host: 'accounts.nintendo.com'
     };
     readonly method: Method = Method.POST;
     readonly parameters: Parameters;
@@ -22,7 +22,7 @@ export namespace SessionToken {
       this.parameters = {
         client_id: '71b963c1b7b6d119',
         session_token_code: code,
-        session_token_code_verifier: verifier,
+        session_token_code_verifier: verifier
       };
     }
 

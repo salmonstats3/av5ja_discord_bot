@@ -16,19 +16,19 @@ export namespace CoralToken {
       hash_method: 1 | 2,
       na_id: string | undefined,
       coral_user_id: string | number | undefined,
-      version: string,
+      version: string
     ) {
       this.headers = {
         'Content-Type': 'application/json',
         'User-Agent': 'av5ja/0.2.2',
         'X-znca-Platform': 'Android',
-        'X-znca-Version': version,
+        'X-znca-Version': version
       };
       this.parameters = {
         coral_user_id: coral_user_id,
         hash_method: hash_method,
         na_id: na_id,
-        token: token,
+        token: token
       };
     }
 

@@ -21,7 +21,7 @@ export namespace GameServiceToken {
         'Content-Type': 'application/json; charset=utf-8',
         'User-Agent': `com.nintendo.znca/${version}(Android/7.1.2)`,
         'X-Platform': 'Android',
-        'X-ProductVersion': version,
+        'X-ProductVersion': version
       };
       this.parameters = {
         parameter: {
@@ -31,8 +31,8 @@ export namespace GameServiceToken {
           naCountry: user.country,
           naIdToken: token.raw_value,
           requestId: hash.request_id,
-          timestamp: hash.timestamp.toString(),
-        },
+          timestamp: hash.timestamp.toString()
+        }
       };
     }
 

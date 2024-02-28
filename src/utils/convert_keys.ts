@@ -15,10 +15,10 @@ export const camelcaseKeys = (obj: any): any => {
     (r: any, v: any, k: any) => {
       return {
         ...r,
-        [camelCase(k)]: camelcaseKeys(v),
+        [camelCase(k)]: camelcaseKeys(v)
       };
     },
-    {},
+    {}
   );
 };
 
@@ -37,9 +37,9 @@ export const snakecaseKeys = (obj: any): any => {
     (r: any, v: any, k: any): any => {
       return {
         ...r,
-        [snakeCase(k)]: snakecaseKeys(v),
+        [snakeCase(k)]: snakecaseKeys(v)
       };
     },
-    {},
+    {}
   );
 };

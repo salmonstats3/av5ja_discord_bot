@@ -11,7 +11,7 @@ export namespace AccessToken {
       Accept: 'application/json',
       'Accept-Encoding': 'gzip',
       'Content-Type': 'application/json',
-      Host: 'accounts.nintendo.com',
+      Host: 'accounts.nintendo.com'
     };
     readonly method: Method = Method.POST;
     readonly parameters: Parameters;
@@ -21,7 +21,7 @@ export namespace AccessToken {
       this.parameters = {
         client_id: '71b963c1b7b6d119',
         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer-session-token',
-        session_token: session_token.raw_value,
+        session_token: session_token.raw_value
       };
     }
 

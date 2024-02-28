@@ -96,16 +96,20 @@ export class JWT<T extends PayloadType> {
   readonly signature: string;
 
   get is_valid(): boolean {
-    return dayjs(this.payload.exp).isBefore(dayjs());
+    return dayjs.unix(this.payload.exp).isBefore(dayjs());
   }
 
   get raw_value(): string {
     return [
       [this.header, this.payload].map((value) => base64url.fromBase64(btoa(JSON.stringify(value)))),
-      this.signature,
+      this.signature
     ]
       .flat()
       .join('.');
+  }
+
+  get expires_in(): string {
+    return dayjs.unix(this.payload.exp).format('YYYY-MM-DD HH:mm:ss');
   }
 
   constructor(raw_value: string) {

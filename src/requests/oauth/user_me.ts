@@ -17,7 +17,7 @@ export namespace UserMe {
         'Accept-Encoding': 'gzip',
         Authorization: `Bearer ${token.raw_value}`,
         Host: 'api.accounts.nintendo.com',
-        'User-Agent': 'NASDKAPI; Android',
+        'User-Agent': 'NASDKAPI; Android'
       };
     }
 

@@ -1,0 +1,6 @@
+export enum CoopMode {
+  UNDEFINED = 'UNDEFINED',
+  REGULAR = 'REGULAR',
+  LIMITED = 'LIMITED',
+  PRIVATE_CUSTOM = 'PRIVATE_CUSTOM'
+}

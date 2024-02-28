@@ -1,10 +1,13 @@
 import crypto from 'crypto';
 
-import { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import base64url from 'base64url';
+import { plainToInstance } from 'class-transformer';
+import dayjs from 'dayjs';
 import {
   ActionRowBuilder,
   AnyComponentBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
@@ -19,11 +22,13 @@ import {
 import Randomstring from 'randomstring';
 
 import { config } from './config';
+import { call_api } from './graph_ql';
 import { request } from './request_type';
 
 import { CoralCredential } from '@/dto/coral_credential';
 import { JWT, Token } from '@/dto/jwt.dto';
 import { StatusCode } from '@/enum/status_code';
+import { CoopHistoryQuery } from '@/requests/av5ja/coop_history_query';
 import { AccessToken } from '@/requests/oauth/access_token';
 import { BulletToken } from '@/requests/oauth/bullet_token';
 import { CoralToken } from '@/requests/oauth/coral_token';
@@ -124,6 +129,7 @@ export class CoralOAuth {
       id: user_me.id,
       language: user_me.language,
       nickname: user_me.nickname,
+      revision: version.revision,
       session_token: session_token
     };
   }
@@ -179,13 +185,41 @@ export class CoralOAuth {
     return ((await request(new BulletToken.Request(access_token, version))) as BulletToken.Response).bullet_token;
   }
 
+  static async get_coop_histories(credential: CoralCredential) {
+    await call_api(new CoopHistoryQuery.Request(), credential);
+  }
+
+  static async get_coop_results(credential: CoralCredential) {}
+
+  static async get_credential(interaction: ButtonInteraction): Promise<CoralCredential> {
+    const options: AxiosRequestConfig = {
+      headers: {
+        'Accept-Encoding': 'gzip, deflate'
+      },
+      method: 'GET',
+      responseType: 'json',
+      url: interaction.message.attachments.first()!.url
+    };
+    return plainToInstance(CoralCredential, (await axios.request(options)).data);
+  }
   /**
    * リザルト取得コマンド
    */
   static get_results = {
     execute: async (interaction: ButtonInteraction): Promise<void> => {
-      console.log(interaction);
-      interaction.reply('Get results');
+      interaction.deferReply({ ephemeral: true });
+      const credential: CoralCredential = await this.get_credential(interaction);
+      const histories = await this.get_coop_histories(credential);
+      const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
+      content
+        .setColor('#0033FF')
+        .setTitle('SplatNet3 Authorization')
+        .setDescription('Authorization is succeeded.')
+        .setTimestamp();
+      const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
+        new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
+      ]);
+      interaction.editReply({ content: '-' });
     }
   };
   /**
@@ -198,6 +232,9 @@ export class CoralOAuth {
       try {
         await interaction.deferReply({ ephemeral: true });
         const credential = await this.get_cookie(user_id, url);
+        const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
+          name: 'token.json'
+        });
         const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
           new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
         ]);
@@ -206,16 +243,11 @@ export class CoralOAuth {
           .setColor('#0033FF')
           .setTitle('SplatNet3 Authorization')
           .setDescription('Authorization is succeeded.')
-          .addFields({
-            inline: true,
-            name: 'Bullet Token',
-            value: credential.bullet_token
-          })
-          .setTimestamp();
+          .setFooter({ text: 'Do not share this token with anyone, It is secret.' })
+          .setTimestamp(dayjs().add(2, 'hour').toDate());
         // @ts-ignore
-        interaction.editReply({ components: [action], embeds: [content] });
+        interaction.editReply({ components: [action], embeds: [content], files: [attachment] });
       } catch (error: any) {
-        console.log(error.response);
         const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Failed');
         content
           .setColor('#FF3300')

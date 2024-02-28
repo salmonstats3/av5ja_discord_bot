@@ -1,5 +1,5 @@
 import { Transform, plainToInstance } from 'class-transformer';
-import { IsJWT, IsNotEmpty, IsSemVer, IsString, validateSync } from 'class-validator';
+import { IsBoolean, IsJWT, IsNotEmpty, IsSemVer, IsString, validateSync } from 'class-validator';
 import * as dotenv from 'dotenv';
 
 import { JWT, Token } from '@/dto/jwt.dto';
@@ -7,6 +7,9 @@ import { JWT, Token } from '@/dto/jwt.dto';
 import 'reflect-metadata';
 
 export class TestConfig {
+  @IsBoolean()
+  readonly is_development: boolean;
+
   @IsJWT()
   @Transform(({ value }) => new JWT<Token.SessionToken>(value))
   readonly session_token: JWT<Token.SessionToken>;
@@ -36,6 +39,7 @@ export const config: TestConfig = (() => {
       application_id: process.env.DISCORD_APPLICATION_ID,
       application_secret: process.env.DISCORD_APPLICATION_SECRET,
       guild_id: process.env.DISCORD_GUILD_ID,
+      is_development: process.env.NODE_ENV === 'development',
       session_token: process.env.SESSION_TOKEN,
       version: process.env.VERSION
     },

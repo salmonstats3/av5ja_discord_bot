@@ -1,6 +1,6 @@
 import { JWT, Token } from './jwt.dto';
 
-export type CoralCredential = {
+export class CoralCredential {
   readonly birthday: string;
   readonly bullet_token: string;
   readonly country: string;
@@ -8,5 +8,6 @@ export type CoralCredential = {
   readonly id: string;
   readonly language: string;
   readonly nickname: string;
+  readonly revision: string;
   readonly session_token: JWT<Token.SessionToken>;
-};
+}

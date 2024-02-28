@@ -118,4 +118,14 @@ export class JWT<T extends PayloadType> {
     this.payload = JSON.parse(atob(payload)) as T;
     this.signature = signature;
   }
+
+  static from<T extends PayloadType>(header: Header, payload: T, signature: string): JWT<T> {
+    const raw_value: string = [
+      [header, payload].map((value) => base64url.fromBase64(btoa(JSON.stringify(value)))),
+      signature
+    ]
+      .flat()
+      .join('.');
+    return new JWT<T>(raw_value);
+  }
 }

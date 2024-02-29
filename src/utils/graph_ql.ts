@@ -37,7 +37,6 @@ async function submit<T extends GraphQL>(request: T, body: any): Promise<any> {
     },
     method: Method.POST,
     responseType: 'json',
-    timeout: 5000,
     url: url.href
   };
   return (await axios.request(options)).data;
@@ -75,7 +74,6 @@ export async function call_api<T extends GraphQL, U extends ReturnType<T['reques
     headers: headers,
     method: Method.POST,
     responseType: 'json',
-    timeout: 10000,
     url: url.href
   };
   const response = await axios.request(options);

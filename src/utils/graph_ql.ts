@@ -33,7 +33,7 @@ async function submit<T extends GraphQL>(request: T, body: any): Promise<any> {
   const options: AxiosRequestConfig = {
     data: body,
     headers: {
-      'User-Agent': 'av5ja_discord/1.0.0'
+      'User-Agent': `av5ja_discord/${config.bot_version}`
     },
     method: Method.POST,
     responseType: 'json',

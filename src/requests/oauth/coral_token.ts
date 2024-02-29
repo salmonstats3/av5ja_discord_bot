@@ -1,11 +1,12 @@
 import { plainToInstance } from 'class-transformer';
 
 import { Method } from '@/enum/method';
+import { config } from '@/utils/config';
 import { ResponseType, RequestType, Headers, Parameters } from '@/utils/request_type';
 
 export namespace CoralToken {
   export class Request implements RequestType {
-    readonly baseURL: string = 'https://api.imink.app/';
+    readonly baseURL: string = config.f_api_url;
     readonly headers: Headers;
     readonly method: Method = Method.POST;
     readonly parameters: Parameters;
@@ -20,7 +21,7 @@ export namespace CoralToken {
     ) {
       this.headers = {
         'Content-Type': 'application/json',
-        'User-Agent': 'av5ja/0.2.2',
+        'User-Agent': `av5ja/${config.bot_version}`,
         'X-znca-Platform': 'Android',
         'X-znca-Version': version
       };

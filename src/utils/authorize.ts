@@ -1,30 +1,9 @@
 import crypto from 'crypto';
 
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import { AxiosError } from 'axios';
 import base64url from 'base64url';
-import { plainToInstance } from 'class-transformer';
 import dayjs from 'dayjs';
-import {
-  APIEmbedField,
-  ActionRowBuilder,
-  AnyComponentBuilder,
-  AttachmentBuilder,
-  ButtonBuilder,
-  ButtonInteraction,
-  ButtonStyle,
-  ChatInputCommandInteraction,
-  EmbedBuilder,
-  Message,
-  ModalBuilder,
-  ModalSubmitInteraction,
-  SlashCommandBuilder,
-  TextBasedChannel,
-  TextInputBuilder,
-  TextInputStyle
-} from 'discord.js';
-import Randomstring from 'randomstring';
 
-import { config } from './config';
 import { call_api } from './graph_ql';
 import { request } from './request_type';
 
@@ -55,7 +34,7 @@ export class CoralOAuth {
 
   constructor() {}
 
-  static oauthURL(state: string, verifier: string): string {
+  static get_oauth_url(state: string, verifier: string): URL {
     // @ts-ignore
     const baseURL: URL = new URL('https://accounts.nintendo.com/connect/1.0.0/authorize');
     const challenge = base64url.fromBase64(crypto.createHash('sha256').update(verifier).digest('base64'));
@@ -69,7 +48,7 @@ export class CoralOAuth {
       state: state
     });
     baseURL.search = parameters.toString();
-    return baseURL.toString();
+    return baseURL;
   }
 
   static async get_cookie(url: string, verifier: string, version: string, revision: string): Promise<CoralCredential> {
@@ -178,261 +157,12 @@ export class CoralOAuth {
 
   static async get_coop_results(
     history: CoopHistoryQuery.Response,
-    credential: CoralCredential
+    credential: CoralCredential,
+    play_time: Date = dayjs(0).toDate()
   ): Promise<PromiseSettledResult<CoopHistoryDetailQuery.Response>[]> {
-    const results = Promise.allSettled(
-      history.histories
-        .map((history) => history.results)
-        .flat()
-        .map((result_id) => this.get_coop_result(result_id, credential))
-    );
-    return results;
+    const result_id_list: ResultId[] = history.histories
+      .flatMap((history) => history.results)
+      .filter((result_id) => dayjs(result_id.playTime).unix() > dayjs(play_time).unix());
+    return Promise.allSettled(result_id_list.map((result_id) => this.get_coop_result(result_id, credential)));
   }
-
-  /**
-   * 認証情報取得コマンド
-   * @param interaction
-   * @returns
-   */
-  static async get_credential(interaction: ButtonInteraction): Promise<CoralCredential> {
-    const options: AxiosRequestConfig = {
-      headers: {
-        'Accept-Encoding': 'gzip, deflate'
-      },
-      method: 'GET',
-      responseType: 'json',
-      url: interaction.message.attachments.first()!.url
-    };
-    return plainToInstance(CoralCredential, (await axios.request(options)).data);
-  }
-
-  /**
-   * リザルト取得コマンド
-   */
-  static get_results = {
-    execute: async (interaction: ButtonInteraction): Promise<void> => {
-      try {
-        const channel: TextBasedChannel | null = interaction.channel;
-        if (channel === null) {
-          interaction.reply({ content: 'This command is not available in DM.', ephemeral: true });
-        }
-        console.log(interaction.message.id);
-
-        await interaction.deferReply({ ephemeral: true });
-        await interaction.editReply({ content: 'Fetching token ...' });
-        const credential: CoralCredential = await (async () => {
-          const credential: CoralCredential = await this.get_credential(interaction);
-          if (credential.expires_in < dayjs().toDate()) {
-            await interaction.editReply({ content: 'Regenerating token ...' });
-            return await this.refresh(credential.session_token);
-          }
-          return credential;
-        })();
-        await interaction.editReply({ content: 'Checking token expiration ...' });
-        await interaction.editReply({ content: 'Fetching coop histories ...' });
-        const histories = await this.get_coop_histories(credential);
-        await interaction.editReply({ content: 'Fetching coop results ...' });
-
-        // const lastPlayedTime: Date = dayjs().subtract(7, 'day').toDate();
-        // const history = histories.histories
-        //   .map((history) => history.results)
-        //   .flat()
-        //   .sort((a, b) => dayjs(b.playTime).unix() - dayjs(a.playTime).unix())
-        //   .at(0);
-        // const results = await this.get_coop_results(histories, credential);
-        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
-        content.setColor('#FF3300').setTitle('Fetch Results').addFields(
-          {
-            inline: true,
-            name: 'Histories',
-            value: histories.histories.length.toString()
-          },
-          {
-            inline: true,
-            name: 'Results',
-            value: '50'
-          }
-        );
-        const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
-          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results')
-        ]);
-        // @ts-ignore
-        await interaction.editReply({ components: [action], embeds: [content], ephemeral: false });
-      } catch (error: any) {
-        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Failed');
-        content
-          .setColor('#FF3300')
-          .setTitle('SplatNet3')
-          .setDescription('Fetching results is failed with a following error.')
-          .addFields(
-            {
-              inline: true,
-              name: 'Error',
-              value: error.message
-            },
-            {
-              inline: true,
-              name: 'Code',
-              value: error.code
-            }
-          );
-        interaction.editReply({ embeds: [content] });
-      }
-    }
-  };
-
-  static get_auth_config(interaction: ModalSubmitInteraction): CoralOAuthConfig {
-    const message: Message | null = interaction.message;
-    if (message === null) {
-      throw new Error('Message is not found.');
-    }
-    if (message.embeds.length === 0) {
-      throw new Error('Embed is not found.');
-    }
-    const fields: APIEmbedField[] = message.embeds[0].fields;
-    const user_id: string = interaction.user.id;
-    const verifier: string | undefined = fields.find((field) => field.name === 'Verifier')?.value;
-    const state: string | undefined = fields.find((field) => field.name === 'State')?.value;
-    const version: string | undefined = fields.find((field) => field.name === 'Version')?.value;
-    const revision: string | undefined = fields.find((field) => field.name === 'Revision')?.value;
-    // every, someで書くと補完が効かない
-    if (state === undefined || verifier === undefined || version === undefined || revision === undefined) {
-      throw new Error('Verifier or State is not found.');
-    }
-    return {
-      revision,
-      state,
-      verifier,
-      version
-    };
-  }
-
-  /**
-   * 認証コマンド
-   */
-  static login = {
-    execute: async (interaction: ModalSubmitInteraction): Promise<void> => {
-      const { revision, state, verifier, version } = this.get_auth_config(interaction);
-      const url: string = interaction.fields.getTextInputValue('oauthURL');
-      try {
-        await interaction.deferReply();
-        const credential = await this.get_cookie(url, verifier, version, revision);
-        const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
-          name: 'token.json'
-        });
-        const action: ActionRowBuilder = new ActionRowBuilder().addComponents([
-          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel('Get results').setCustomId('get_results'),
-          new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel('Refresh').setCustomId('refresh')
-        ]);
-        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Success');
-        content
-          .setColor('#0033FF')
-          .setTitle('SplatNet3 Authorization')
-          .setDescription('Authorization is succeeded.')
-          .setFooter({ text: 'Do not share this token with anyone, It is secret.' })
-          .setTimestamp(dayjs().add(2, 'hour').toDate());
-        // @ts-ignore
-        interaction.editReply({ components: [action], embeds: [content], files: [attachment] });
-      } catch (error: any) {
-        const content: EmbedBuilder = new EmbedBuilder().setColor('#0099FF').setTitle('Authorization Failed');
-        content
-          .setColor('#FF3300')
-          .setTitle('SplatNet3 Authorization')
-          .setDescription('Authorization is failed with a following error.')
-          .addFields(
-            {
-              inline: true,
-              name: 'Error',
-              value: error.message
-            },
-            {
-              inline: true,
-              name: 'Code',
-              value: error.code
-            }
-          );
-        interaction.editReply({ embeds: [content] });
-      }
-    }
-  };
-
-  /**
-   * 入力認証URL表示コマンド
-   */
-  static submit = {
-    execute: async (interaction: ButtonInteraction): Promise<void> => {
-      const modal: ModalBuilder = new ModalBuilder().setCustomId('submit').setTitle('SplatNet3 Authorization');
-      const content: TextInputBuilder = new TextInputBuilder()
-        .setCustomId('oauthURL')
-        .setLabel('Authorization URL')
-        .setRequired(true)
-        .setStyle(TextInputStyle.Paragraph);
-      const action = new ActionRowBuilder().addComponents(content);
-      // @ts-ignore
-      modal.addComponents(action);
-      interaction.showModal(modal);
-    }
-  };
-
-  /**
-   * 認証用URL送信コマンド
-   */
-  static authorize = {
-    data: new SlashCommandBuilder().setName('authorize').setDescription('Get SplatNet3 Authorization URL'),
-    execute: async (interaction: ChatInputCommandInteraction): Promise<void> => {
-      const verifier: string = Randomstring.generate(64);
-      const state: string = Randomstring.generate(64);
-      const reply = await interaction.deferReply({ fetchReply: true });
-      const user_id: string = interaction.user.id;
-      const version: Version.Response = await this.get_version();
-      const action: ActionRowBuilder<AnyComponentBuilder> = new ActionRowBuilder().addComponents(
-        ...[
-          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Open URL').setURL(this.oauthURL(state, verifier)),
-          new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel('Authorize').setCustomId('authorize')
-        ]
-      );
-      const content: EmbedBuilder = new EmbedBuilder()
-        .setColor('#0099FF')
-        .setTitle('SplatNet3 Authorization')
-        .setDescription(
-          'Press the Open URL button, sign in with your Nintendo Account, right-click on the Select this account and copy the URL. Then press Authorize, paste the copied URL and submit.'
-        )
-        .addFields(
-          {
-            inline: true,
-            name: 'Version',
-            value: config.version
-          },
-          {
-            inline: true,
-            name: 'Revision',
-            value: version.revision
-          },
-          {
-            inline: true,
-            name: 'Bot',
-            value: process.env.BOT_VERSION!
-          },
-          {
-            inline: true,
-            name: 'Verifier',
-            value: verifier
-          },
-          {
-            inline: true,
-            name: 'State',
-            value: state
-          },
-          {
-            inline: true,
-            name: 'Issuer',
-            value: user_id
-          }
-        )
-        .setTimestamp();
-      await reply.delete();
-      // @ts-ignore
-      interaction.user.send({ components: [action], embeds: [content] });
-    }
-  };
 }

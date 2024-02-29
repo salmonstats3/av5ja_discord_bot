@@ -1,18 +1,12 @@
-import { Transform, plainToInstance } from 'class-transformer';
-import { IsBoolean, IsJWT, IsNotEmpty, IsSemVer, IsString, validateSync } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { IsBoolean, IsNotEmpty, IsSemVer, IsString, IsUrl, validateSync } from 'class-validator';
 import * as dotenv from 'dotenv';
-
-import { JWT, Token } from '@/dto/jwt.dto';
 
 import 'reflect-metadata';
 
 export class TestConfig {
   @IsBoolean()
   readonly is_development: boolean;
-
-  @IsJWT()
-  @Transform(({ value }) => new JWT<Token.SessionToken>(value))
-  readonly session_token: JWT<Token.SessionToken>;
 
   @IsSemVer()
   readonly version: string;
@@ -32,6 +26,9 @@ export class TestConfig {
   @IsString()
   @IsNotEmpty()
   readonly bot_version: string;
+
+  @IsUrl()
+  readonly url: string;
 }
 
 export const config: TestConfig = (() => {
@@ -45,14 +42,14 @@ export const config: TestConfig = (() => {
       bot_version: process.env.BOT_VERSION,
       guild_id: process.env.DISCORD_GUILD_ID,
       is_development: process.env.NODE_ENV === 'development',
-      session_token: process.env.SESSION_TOKEN,
+      url: process.env.API_URL,
       version: process.env.VERSION
     },
     { enableImplicitConversion: true, excludeExtraneousValues: false }
   );
   const errors = validateSync(configuration, { enableDebugMessages: true, stopAtFirstError: true, whitelist: true });
-  // if (errors.length > 0) {
-  //   throw new Error(errors.toString());
-  // }
+  if (errors.length > 0) {
+    throw new Error(errors.toString());
+  }
   return configuration;
 })();

@@ -29,8 +29,7 @@ export interface GraphQL {
 }
 
 async function submit<T extends GraphQL>(request: T, body: any): Promise<any> {
-  const base_url: string = config.is_development ? 'http://127.0.0.1:3030' : 'https://api.splatnet3.com';
-  const url = new URL(`${base_url}/v${request.version}/${request.destination}`);
+  const url = new URL(`${config.url}/v${request.version}/${request.destination}`);
   const options: AxiosRequestConfig = {
     data: body,
     headers: {

@@ -195,8 +195,12 @@ export class CommandManager {
         .setFooter({ text: 'This authentication flow uses third-party APIs, at your own risk.' })
         .setTimestamp();
       await reply.delete();
-      // @ts-ignore
-      interaction.user.send({ components: [action], embeds: [content] });
+      try {
+        // @ts-ignore
+        interaction.user.send({ components: [action], embeds: [content] });
+      } catch (error) {
+        interaction.reply({ content: 'Please enable DMs from server members.' });
+      }
     },
     /**
      * モーダル表示

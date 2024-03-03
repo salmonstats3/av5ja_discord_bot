@@ -2,6 +2,8 @@
 
 Discord bot client for SplatNet3.
 
+> This repository does not contain any contenes copyrighted by Nintendo Co., Ltd.
+
 ## Features
 
 - Sign in with Nintendo Switch Online account with Third party API

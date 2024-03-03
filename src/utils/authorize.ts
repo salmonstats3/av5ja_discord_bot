@@ -4,6 +4,7 @@ import { AxiosError } from 'axios';
 import base64url from 'base64url';
 import dayjs from 'dayjs';
 
+import { config } from './config';
 import { call_api } from './graph_ql';
 import { request } from './request_type';
 
@@ -160,9 +161,14 @@ export class CoralOAuth {
     credential: CoralCredential,
     play_time: Date = dayjs(0).toDate()
   ): Promise<PromiseSettledResult<CoopHistoryDetailQuery.Response>[]> {
-    const result_id_list: ResultId[] = history.histories
-      .flatMap((history) => history.results)
-      .filter((result_id) => dayjs(result_id.playTime).unix() > dayjs(play_time).unix());
-    return Promise.allSettled(result_id_list.map((result_id) => this.get_coop_result(result_id, credential)));
+    if (config.is_development) {
+      const result_id_list: ResultId[] = history.histories.flatMap((history) => history.results).slice(0, 5);
+      return Promise.allSettled(result_id_list.map((result_id) => this.get_coop_result(result_id, credential)));
+    } else {
+      const result_id_list: ResultId[] = history.histories
+        .flatMap((history) => history.results)
+        .filter((result_id) => dayjs(result_id.playTime).unix() > dayjs(play_time).unix());
+      return Promise.allSettled(result_id_list.map((result_id) => this.get_coop_result(result_id, credential)));
+    }
   }
 }

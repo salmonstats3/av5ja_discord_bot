@@ -23,8 +23,7 @@ export class TestConfig {
   @IsNotEmpty()
   readonly guild_id: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsSemVer()
   readonly bot_version: string;
 
   @IsUrl()

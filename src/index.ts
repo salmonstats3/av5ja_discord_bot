@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
-import { Client, Events, GatewayIntentBits, REST, Routes, User } from 'discord.js';
+import { ChatInputCommandInteraction, Client, Events, GatewayIntentBits, REST, Routes, User } from 'discord.js';
 
 import { ButtonCommand, ModalCommand, SlashCommand } from './enum/commnad_id';
 import { CommandManager } from './utils/commnad';
@@ -62,7 +62,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isCommand()) {
     switch (interaction.commandName) {
       case SlashCommand.AUTHORIZE:
-        CommandManager.authorize.send_dm(interaction);
+        CommandManager.authorize.send_dm(interaction as ChatInputCommandInteraction);
         break;
       default:
         break;

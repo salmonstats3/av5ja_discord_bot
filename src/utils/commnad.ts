@@ -144,7 +144,6 @@ export class CommandManager {
     send_dm: async (interaction: ChatInputCommandInteraction): Promise<void> => {
       const verifier: string = Randomstring.generate(64);
       const state: string = Randomstring.generate(64);
-      const reply = await interaction.deferReply({ fetchReply: true });
       const user_id: string = interaction.user.id;
       const version: Version.Response = await CoralOAuth.get_version();
       const oauthURL: URL = CoralOAuth.get_oauth_url(state, verifier);
@@ -194,12 +193,14 @@ export class CommandManager {
         )
         .setFooter({ text: 'This authentication flow uses third-party APIs, at your own risk.' })
         .setTimestamp();
-      await reply.delete();
+      // await reply.delete();
       try {
+        interaction.reply({ content: 'Request accepted!' });
         // @ts-ignore
         interaction.user.send({ components: [action], embeds: [content] });
       } catch (error) {
         interaction.reply({ content: 'Please enable DMs from server members.' });
+        throw error;
       }
     },
     /**

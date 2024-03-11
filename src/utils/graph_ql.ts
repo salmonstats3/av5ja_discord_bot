@@ -76,23 +76,29 @@ export async function call_api<T extends GraphQL, U extends ReturnType<T['reques
     responseType: 'json',
     url: url.href
   };
-  const response = await axios.request(options);
+  // eslint-disable-next-line no-useless-catch
+  try {
+    const response = await axios.request(options);
 
-  switch (response.status) {
-    case 401:
-      throw new AxiosError('', StatusCode.ERROR_INVALID_GAME_WEB_TOKEN);
-    case 403:
-      throw new AxiosError('', StatusCode.ERROR_OBSOLETE_VERSION);
-    default:
-      break;
-  }
-
-  const errors = snakecaseKeys(response.data).errors;
-  if (errors !== undefined) {
-    if (errors[0].message === 'PersistedQueryNotFound') {
-      throw new AxiosError('SHA256Hash update required.', StatusCode.ERROR_DEPRECATED_SHA256HASH);
+    switch (response.status) {
+      case 401:
+        throw new AxiosError('', StatusCode.ERROR_INVALID_GAME_WEB_TOKEN);
+      case 403:
+        throw new AxiosError('', StatusCode.ERROR_OBSOLETE_VERSION);
+      default:
+        break;
     }
-    throw new AxiosError('Unknown error occurred.', StatusCode.ERROR_UNKNOWN_STATUS);
+
+    const errors = snakecaseKeys(response.data).errors;
+    if (errors !== undefined) {
+      if (errors[0].message === 'PersistedQueryNotFound') {
+        throw new AxiosError('SHA256Hash update required.', StatusCode.ERROR_DEPRECATED_SHA256HASH);
+      }
+      throw new AxiosError('Unknown error occurred.', StatusCode.ERROR_UNKNOWN_STATUS);
+    }
+    return request.request(await submit(request, response.data)) as U;
+  } catch (error: any) {
+    console.error(error);
+    throw error;
   }
-  return request.request(await submit(request, response.data)) as U;
 }

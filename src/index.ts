@@ -38,9 +38,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         /** Botを落とすとキャッシュから再生成できないので */
         const user: User | undefined = client.users.cache.get(interaction.user.id);
         if (user?.dmChannel == null) {
-          const message = await interaction.deferReply({ fetchReply: true });
+          const message = await interaction.deferReply({ ephemeral: false, fetchReply: true });
           await interaction.user.createDM(true);
-          message.delete();
+          await message.delete();
           return;
         }
         CommandManager.get_results.fetch(interaction);

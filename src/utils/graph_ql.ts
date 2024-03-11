@@ -98,7 +98,40 @@ export async function call_api<T extends GraphQL, U extends ReturnType<T['reques
     }
     return request.request(await submit(request, response.data)) as U;
   } catch (error: any) {
-    console.error(error);
-    throw error;
+    if (error.isAxiosError) {
+      const status_code: number = error.response.status;
+      const error_description: string = error.response.data.error_description;
+      switch (status_code) {
+        case 400:
+          throw new AxiosError(error_description, StatusCode.ERROR_INVALID_PARAMETERS, undefined, {
+            status: status_code
+          });
+        case 401:
+          throw new AxiosError(error_description, StatusCode.ERROR_INVALID_GAME_WEB_TOKEN, undefined, {
+            status: status_code
+          });
+        case 403:
+          throw new AxiosError(error_description, StatusCode.ERROR_OBSOLETE_VERSION, undefined, {
+            status: status_code
+          });
+        case 404:
+          throw new AxiosError(error_description, StatusCode.ERROR_NOT_FOUND, undefined, { status: status_code });
+        case 429:
+          throw new AxiosError(error_description, StatusCode.ERROR_RATE_LIMIT, undefined, { status: status_code });
+        case 499:
+          throw new AxiosError(error_description, StatusCode.ERROR_BANNED_USER, undefined, { status: status_code });
+        case 500:
+        case 509:
+          throw new AxiosError(error_description, StatusCode.ERROR_SERVER, undefined, { status: status_code });
+        case 503:
+          throw new AxiosError(error_description, StatusCode.ERROR_SERVER_MAINTENANCE, undefined, {
+            status: status_code
+          });
+        default:
+          throw new AxiosError(error_description, StatusCode.ERROR_UNKNOWN_STATUS, undefined, { status: status_code });
+      }
+    } else {
+      throw new AxiosError('UNKNOWN_ERROR', StatusCode.ERROR_UNKNOWN_STATUS);
+    }
   }
 }

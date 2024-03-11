@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "author": "tkgling",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "commit": "git-cz",
     "dev": "bun src/index.ts",

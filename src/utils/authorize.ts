@@ -162,7 +162,7 @@ export class CoralOAuth {
     play_time: Date = dayjs(0).toDate()
   ): Promise<PromiseSettledResult<CoopHistoryDetailQuery.Response>[]> {
     if (config.is_development) {
-      const result_id_list: ResultId[] = history.histories.flatMap((history) => history.results).slice(0, 50);
+      const result_id_list: ResultId[] = history.histories.flatMap((history) => history.results).slice(0, 10);
       return await Promise.allSettled(result_id_list.map((result_id) => this.get_coop_result(result_id, credential)));
     } else {
       const result_id_list: ResultId[] = history.histories

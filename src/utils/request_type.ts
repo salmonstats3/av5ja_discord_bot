@@ -38,7 +38,6 @@ export async function request<T extends RequestType, U extends ReturnType<T['req
     const status_code: number = response.status ?? 0;
     if (status_code !== 200 && status_code !== 201 && status_code !== 0) {
       const error_description: string = response.data.error_description;
-      const error_message: string = response.data.error_message;
       switch (status_code) {
         case 400:
           throw new AxiosError(error_description, StatusCode.ERROR_INVALID_PARAMETERS);
@@ -72,42 +71,40 @@ export async function request<T extends RequestType, U extends ReturnType<T['req
     }
     return request.request(snakecaseKeys(response.data)) as U;
   } catch (error: any) {
-    // if (error.isAxiosError === true) {
-    //   const status_code: number = error.response.status;
-    //   const error_description: string = error.response.data.error_description;
-    //   const error_message: string = error.response.data.error_message;
-    //   switch (status_code) {
-    //     case 400:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_INVALID_PARAMETERS);
-    //       break;
-    //     case 401:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_INVALID_GAME_WEB_TOKEN);
-    //       break;
-    //     case 403:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_OBSOLETE_VERSION);
-    //       break;
-    //     case 404:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_NOT_FOUND);
-    //       break;
-    //     case 429:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_RATE_LIMIT);
-    //       break;
-    //     case 499:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_BANNED_USER);
-    //       break;
-    //     case 500:
-    //     case 509:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_SERVER);
-    //       break;
-    //     case 503:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_SERVER_MAINTENANCE);
-    //       break;
-    //     default:
-    //       throw new AxiosError(error_description, StatusCode.ERROR_UNKNOWN_STATUS);
-    //       break;
-    //   }
-    // } else {
-    //   throw new AxiosError('UNKNOWN_ERROR', StatusCode.ERROR_UNKNOWN_STATUS);
-    // }
+    if (error.isAxiosError === true) {
+      const status_code: number = error.response.status;
+      const error_description: string = error.response.data.error_description;
+      switch (status_code) {
+        case 400:
+          throw new AxiosError(error_description, StatusCode.ERROR_INVALID_PARAMETERS, undefined, {
+            status: status_code
+          });
+        case 401:
+          throw new AxiosError(error_description, StatusCode.ERROR_INVALID_GAME_WEB_TOKEN, undefined, {
+            status: status_code
+          });
+        case 403:
+          throw new AxiosError(error_description, StatusCode.ERROR_OBSOLETE_VERSION, undefined, {
+            status: status_code
+          });
+        case 404:
+          throw new AxiosError(error_description, StatusCode.ERROR_NOT_FOUND, undefined, { status: status_code });
+        case 429:
+          throw new AxiosError(error_description, StatusCode.ERROR_RATE_LIMIT, undefined, { status: status_code });
+        case 499:
+          throw new AxiosError(error_description, StatusCode.ERROR_BANNED_USER, undefined, { status: status_code });
+        case 500:
+        case 509:
+          throw new AxiosError(error_description, StatusCode.ERROR_SERVER, undefined, { status: status_code });
+        case 503:
+          throw new AxiosError(error_description, StatusCode.ERROR_SERVER_MAINTENANCE, undefined, {
+            status: status_code
+          });
+        default:
+          throw new AxiosError(error_description, StatusCode.ERROR_UNKNOWN_STATUS, undefined, { status: status_code });
+      }
+    } else {
+      throw new AxiosError('UNKNOWN_ERROR', StatusCode.ERROR_UNKNOWN_STATUS);
+    }
   }
 }

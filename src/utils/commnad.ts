@@ -38,24 +38,29 @@ export class CommandManager {
       const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
         name: 'token.json'
       });
-      interaction.message.edit({ embeds: [content], files: [attachment] });
+      await interaction.message.edit({ embeds: [content], files: [attachment] });
     },
     fetch: async (interaction: ButtonInteraction): Promise<void> => {
-      await interaction.deferReply();
-      await interaction.editReply({ content: 'Fetching token ...' });
-      const credential = await this.get_results.refresh(interaction);
-      await interaction.editReply({ content: 'Fetching coop histories ...' });
-      const histories = await CoralOAuth.get_coop_histories(credential);
-      await interaction.editReply({ content: 'Fetching coop results ...' });
-      const last_play_time: Date = await this.get_results.play_time(interaction);
-      await CoralOAuth.get_coop_results(histories, credential, last_play_time);
-
-      // データ更新
-      const play_time: Date = histories.histories
-        .flatMap((history) => history.results.map((result) => result.playTime))
-        .reduce((a, b) => (a > b ? a : b));
-      await this.get_results.edit(interaction, play_time, credential);
-      await interaction.deleteReply();
+      try {
+        const message = await interaction.deferReply({ ephemeral: false, fetchReply: true });
+        await interaction.editReply({ content: 'Fetching token ...' });
+        const credential = await this.get_results.refresh(interaction);
+        await interaction.editReply({ content: 'Fetching coop histories ...' });
+        const histories = await CoralOAuth.get_coop_histories(credential);
+        await interaction.editReply({ content: 'Fetching coop results ...' });
+        const last_play_time: Date = await this.get_results.play_time(interaction);
+        const results = await CoralOAuth.get_coop_results(histories, credential, last_play_time);
+        // データ更新
+        const play_time: Date = histories.histories
+          .flatMap((history) => history.results.map((result) => result.playTime))
+          .reduce((a, b) => (dayjs(a).unix() > dayjs(b).unix() ? a : b), last_play_time);
+        await this.get_results.edit(interaction, play_time, credential);
+        if (interaction.replied) {
+          await message.delete();
+        }
+      } catch (error: any) {
+        await this.errorReply(interaction, 'Fetch Results Failed', error);
+      }
     },
     get_credential: async (interaction: ButtonInteraction): Promise<CoralCredential> => {
       const attachment: Attachment | undefined = interaction.message.attachments.first();
@@ -111,31 +116,35 @@ export class CommandManager {
      * @param interaction
      */
     login: async (interaction: ModalSubmitInteraction): Promise<void> => {
-      const { revision, state, verifier, version } = this.get_auth_config(interaction);
-      const oauth_url: string = interaction.fields.getTextInputValue(TextCommnad.OAUTH_URL);
-      await interaction.deferReply();
-      const credential = await CoralOAuth.get_cookie(oauth_url, verifier, version, revision);
-      const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
-        name: 'token.json'
-      });
-      const action: ActionRowBuilder<ButtonBuilder> = new ActionRowBuilder<ButtonBuilder>().addComponents([
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Primary)
-          .setLabel('Get results')
-          .setCustomId(ButtonCommand.GET_RESULTS),
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Secondary)
-          .setLabel('Refresh')
-          .setCustomId(ButtonCommand.REFRESH)
-          .setDisabled(true),
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Danger)
-          .setLabel('Share')
-          .setCustomId(ButtonCommand.SHARE)
-          .setDisabled(true)
-      ]);
-      const content: EmbedBuilder = this.embeds_builder(interaction.user.id);
-      interaction.editReply({ components: [action], embeds: [content], files: [attachment] });
+      try {
+        const { revision, state, verifier, version } = this.get_auth_config(interaction);
+        const oauth_url: string = interaction.fields.getTextInputValue(TextCommnad.OAUTH_URL);
+        await interaction.deferReply();
+        const credential = await CoralOAuth.get_cookie(oauth_url, verifier, version, revision);
+        const attachment: AttachmentBuilder = new AttachmentBuilder(Buffer.from(JSON.stringify(credential)), {
+          name: 'token.json'
+        });
+        const action: ActionRowBuilder<ButtonBuilder> = new ActionRowBuilder<ButtonBuilder>().addComponents([
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Primary)
+            .setLabel('Get results')
+            .setCustomId(ButtonCommand.GET_RESULTS),
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Secondary)
+            .setLabel('Refresh')
+            .setCustomId(ButtonCommand.REFRESH)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Danger)
+            .setLabel('Share')
+            .setCustomId(ButtonCommand.SHARE)
+            .setDisabled(true)
+        ]);
+        const content: EmbedBuilder = this.embeds_builder(interaction.user.id);
+        await interaction.editReply({ components: [action], embeds: [content], files: [attachment] });
+      } catch (error: any) {
+        await this.errorReply(interaction, 'Authorization Failed', error);
+      }
     },
     /**
      * DM送信
@@ -195,11 +204,11 @@ export class CommandManager {
         .setTimestamp();
       // await reply.delete();
       try {
-        interaction.reply({ content: 'Request accepted!' });
+        await interaction.reply({ content: 'Request accepted!' });
         // @ts-ignore
-        interaction.user.send({ components: [action], embeds: [content] });
+        await interaction.user.send({ components: [action], embeds: [content] });
       } catch (error) {
-        interaction.reply({ content: 'Please enable DMs from server members.' });
+        await interaction.reply({ content: 'Please enable DMs from server members.' });
         throw error;
       }
     },
@@ -219,7 +228,7 @@ export class CommandManager {
       const action = new ActionRowBuilder().addComponents(content);
       // @ts-ignore
       modal.addComponents(action);
-      interaction.showModal(modal);
+      await interaction.showModal(modal);
     }
   };
 
@@ -249,6 +258,37 @@ export class CommandManager {
       .setTimestamp();
   }
 
+  private static async errorReply(
+    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
+    title: string,
+    error: any
+  ): Promise<void> {
+    if (error.isAxiosError) {
+      const content: EmbedBuilder = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle(title)
+        .setDescription(error.code)
+        .addFields(
+          {
+            inline: true,
+            name: 'Status Code',
+            value: error.request.status.toString()
+          },
+          {
+            inline: true,
+            name: 'Version',
+            value: config.version
+          },
+          {
+            name: 'Error Description',
+            value: error.message
+          }
+        )
+        .setFooter({ text: 'This authentication flow uses third-party APIs, at your own risk.' })
+        .setTimestamp();
+      await interaction.editReply({ embeds: [content] });
+    }
+  }
   /**
    * メッセージから認証に必要な情報を取得する
    * @param interaction
